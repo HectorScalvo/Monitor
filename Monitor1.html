@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Simulador ICTUS SUMMA112</title>
+
+<!-- TAILWIND CSS CORRECTAMENTE CARGADO -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+/* Ondas continuas */
+@keyframes wave {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+}
+
+.curva {
+    width: 200%;
+    height: 90px;
+    animation: wave 3s linear infinite;
+    background-repeat: repeat-x;
+}
+
+/* ECG */
+.ecg {
+background-image: url('data:image/svg+xml;utf8,\
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="90">\
+<polyline points="0,45 30,45 40,10 60,80 80,45 200,45 215,15 235,45 1600,45" fill="none" stroke="lime" stroke-width="3"/>\
+</svg>');
+}
+
+/* SpO2 */
+.spo2_curve {
+background-image: url('data:image/svg+xml;utf8,\
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="90">\
+<polyline points="0,60 80,55 160,48 240,52 320,62 400,70 480,63 1600,60" fill="none" stroke="cyan" stroke-width="3"/>\
+</svg>');
+}
+
+/* ETCO2 */
+.etco2_curve {
+background-image: url('data:image/svg+xml;utf8,\
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="90">\
+<polyline points="0,80 200,80 250,20 400,20 420,80 1600,80" fill="none" stroke="yellow" stroke-width="3"/>\
+</svg>');
+}
+
+/* Botón animación */
+@keyframes press {
+    0% { transform: scale(1); }
+    50% { transform: scale(0.92); }
+    100% { transform: scale(1); }
+}
+
+/* Alarmas visuales */
+@keyframes alarmaRoja {
+    0% { color: white; }
+    50% { color: red; }
+    100% { color: white; }
+}
+.alarma { animation: alarmaRoja 1s infinite; }
+</style>
+
+</head>
+
+<body class="bg-black text-green-400 overflow-hidden">
+
+<div class="flex h-screen">
+
+    <!-- COLUMNA IZQUIERDA 1/5 -->
+    <div class="w-1/5 bg-gray-900 p-4 border-r-4 border-gray-700 flex flex-col gap-6">
+
+        <div id="box_fc" onclick="editar('fc')" class="cursor-pointer">
+            <p class="text-xl text-green-300">FC</p>
+            <p id="fc" class="text-4xl font-bold">72</p>
+            <p>bpm</p>
+        </div>
+
+        <div id="box_spo2" onclick="editar('spo2')" class="cursor-pointer">
+            <p class="text-xl text-blue-300">SpO₂</p>
+            <p id="spo2" class="text-4xl text-blue-300 font-bold">96</p>
+            <p>%</p>
+        </div>
+
+        <div id="box_etco2" onclick="editar('etco2')" class="cursor-pointer">
+            <p class="text-xl text-yellow-300">EtCO₂</p>
+            <p id="etco2" class="text-4xl text-yellow-300 font-bold">--</p>
+            <p>mmHg</p>
+        </div>
+
+        <div id="box_ta" onclick="editarTA()" class="cursor-pointer">
+            <p class="text-xl text-red-300">TA</p>
+            <p id="ta" class="text-4xl font-bold">135/80</p>
+            <p>mmHg</p>
+        </div>
+
+    </div>
+
+    <!-- PANEL DERECHO 4/5 -->
+    <div class="w-4/5 p-4 flex flex-col">
+
+        <!-- Cronómetro + botón SUMMA112 -->
+        <div class="flex justify-between items-center mb-4">
+
+            <!-- Cronómetro -->
+            <div class="text-3xl w-full text-center" id="cronometro">00:00:00</div>
+
+            <!-- BOTÓN SUMMA112 -->
+            <div id="botonSUMMA"
+                onclick="toggleSUMMA()"
+                class="cursor-pointer ml-4 bg-white p-2 rounded-lg shadow-xl"
+                style="width:150px;">
+
+                <!-- BANDERAS -->
+                <div class="flex">
+
+                    <!-- Izquierda -->
+                    <div style="width:50%; height:40px;">
+                        <div style="background:#cc0000; height:33%;"></div>
+                        <div style="background:yellow; height:33%;"></div>
+                        <div style="background:#cc0000; height:33%;"></div>
+                    </div>
+
+                    <!-- Derecha (Madrid) -->
+                    <div style="width:50%; height:40px; background:#cc0000;">
+                        <div style="display:flex; justify-content:center; gap:3px; padding-top:2px;">
+                            <span style="color:white;">★</span><span style="color:white;">★</span>
+                            <span style="color:white;">★</span><span style="color:white;">★</span>
+                        </div>
+                        <div style="display:flex; justify-content:center; gap:3px;">
+                            <span style="color:white;">★</span><span style="color:white;">★</span>
+                            <span style="color:white;">★</span>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Texto SUMMA112 -->
+                <div class="text-center text-blue-600 font-bold text-xl mt-1"
+                     style="font-family:Arial; text-shadow:0 0 3px white;">
+                    SUMMA112
+                </div>
+            </div>
+        </div>
+
+        <!-- Curvas -->
+        <div class="flex flex-col gap-6 w-full overflow-hidden">
+
+            <div class="overflow-hidden"><div class="curva ecg"></div></div>
+            <div class="overflow-hidden"><div class="curva etco2_curve"></div></div>
+            <div class="overflow-hidden"><div class="curva spo2_curve"></div></div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+/* VARIABLES */
+let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let fc_val = 72;
+let intervalLatido;
+let segundos = 0;
+let intervalCrono;
+let activoSUMMA = false;
+
+/* SONIDO */
+function sonidoLatido(){
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.frequency.value = 800;
+    g.gain.setValueAtTime(0.5, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+0.15);
+    o.connect(g).connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime+0.15);
+}
+
+function iniciarLatidos(){
+    clearInterval(intervalLatido);
+    intervalLatido = setInterval(sonidoLatido, 60000/fc_val);
+}
+
+/* CRONÓMETRO */
+function actualizarCrono(){
+    segundos++;
+    const h = String(Math.floor(segundos/3600)).padStart(2,'0');
+    const m = String(Math.floor((segundos%3600)/60)).padStart(2,'0');
+    const s = String(segundos%60).padStart(2,'0');
+    cronometro.textContent = `${h}:${m}:${s}`;
+}
+
+function iniciarCrono(){ intervalCrono = setInterval(actualizarCrono,1000); }
+function pararCrono(){
+    clearInterval(intervalCrono);
+    segundos = 0;
+    cronometro.textContent="00:00:00";
+}
+
+/* BOTÓN SUMMA112 */
+function toggleSUMMA(){
+    const btn = document.getElementById("botonSUMMA");
+    btn.style.animation = "press 0.3s";
+
+    activoSUMMA = !activoSUMMA;
+
+    if (activoSUMMA){
+        iniciarCrono();
+        iniciarLatidos();
+    } else {
+        pararCrono();
+        clearInterval(intervalLatido);
+    }
+
+    setTimeout(()=>btn.style.animation="",300);
+}
+
+/* EDITAR PARÁMETROS */
+function editar(id){
+    const el = document.getElementById(id);
+    const v = prompt("Nuevo valor:", el.textContent);
+    if (!v) return;
+    el.textContent = v;
+    if (id==="fc"){ fc_val = parseInt(v); iniciarLatidos(); }
+    checkAlarmas();
+}
+
+function editarTA(){
+    const el = document.getElementById("ta");
+    const v = prompt("Nueva TA:", el.textContent);
+    if (!v) return;
+    el.textContent = v;
+    checkAlarmas();
+}
+
+/* ALARMAS */
+function clearAlarmas(){
+    ["box_fc","box_spo2","box_ta"].forEach(id =>
+        document.getElementById(id).classList.remove("alarma")
+    );
+}
+
+function checkAlarmas(){
+    clearAlarmas();
+    const fc = parseInt(fc_val);
+    const spo = parseInt(spo2.textContent);
+    const sist = parseInt(ta.textContent.split("/")[0]);
+
+    if (fc>120) box_fc.classList.add("alarma");
+    if (spo<92) box_spo2.classList.add("alarma");
+    if (sist>170) box_ta.classList.add("alarma");
+}
+</script>
+
+</body>
+</html> 
