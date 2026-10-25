@@ -25,14 +25,13 @@
   }
 
   .curva.ecg svg,
-  .curva.spo2_curve svg,
-  .curva.etco2_curve svg {
+  .curva.spo2_curve svg {
     animation: drift 2s linear infinite;
   }
 
   @keyframes drift {
     0% { transform: translateX(0); }
-    100% { transform: translateX(-12%); }
+    100% { transform: translateX(-14%); }
   }
 
   @keyframes press {
@@ -120,7 +119,6 @@
 
         <div class="flex flex-col gap-6 w-full overflow-hidden">
             <div class="overflow-hidden curva ecg"></div>
-            <div class="overflow-hidden curva etco2_curve"></div>
             <div class="overflow-hidden curva spo2_curve"></div>
         </div>
     </div>
@@ -141,23 +139,19 @@ function calcularOndas() {
 function generarComplejoECG(x) {
     return `
       M ${x} 45
-      L ${x+22} 45
-      L ${x+28} 45
-      L ${x+42} 12
-      L ${x+66} 84
-      L ${x+94} 45
-      L ${x+120} 45
-      L ${x+160} 45
+      C ${x + 18} 45, ${x + 28} 45, ${x + 38} 14
+      C ${x + 54} 8, ${x + 68} 10, ${x + 76} 35
+      C ${x + 88} 58, ${x + 102} 60, ${x + 118} 45
+      C ${x + 135} 45, ${x + 150} 45, ${x + 170} 45
     `;
 }
 
 function generarECG(ondas) {
-    const ancho = 160 * ondas;
+    const ancho = 170 * ondas;
     let d = '';
 
     for (let i = 0; i < ondas; i++) {
-        const x = i * 160;
-        d += generarComplejoECG(x);
+        d += generarComplejoECG(i * 170);
     }
 
     return `
@@ -170,10 +164,18 @@ function generarECG(ondas) {
 function generarSpO2(ondas) {
     const ancho = 170 * ondas;
     let d = '';
+
     for (let i = 0; i < ondas; i++) {
         const x = i * 170;
-        d += `M ${x} 60 L ${x+80} 55 L ${x+160} 48 L ${x+240} 52 L ${x+320} 62 L ${x+400} 70 L ${x+480} 63 L ${x+560} 60 `;
+        d += `
+          M ${x} 58
+          C ${x + 18} 58, ${x + 30} 58, ${x + 42} 52
+          C ${x + 58} 46, ${x + 72} 72, ${x + 90} 80
+          C ${x + 106} 86, ${x + 124} 58, ${x + 142} 54
+          C ${x + 158} 52, ${x + 170} 58, ${x + 170} 58
+        `;
     }
+
     return `
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${ancho} 90" preserveAspectRatio="none">
         <path d="${d}" fill="none" stroke="cyan" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
@@ -181,31 +183,10 @@ function generarSpO2(ondas) {
     `;
 }
 
-function generarEtCO2(ondas) {
-    const ancho = 170 * ondas;
-    let d = '';
-    for (let i = 0; i < ondas; i++) {
-        const x = i * 170;
-        d += `M ${x} 80 L ${x+200} 80 L ${x+250} 20 L ${x+420} 20 L ${x+470} 80 L ${x+560} 80 `;
-    }
-    return `
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${ancho} 90" preserveAspectRatio="none">
-        <path d="${d}" fill="none" stroke="yellow" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    `;
-}
-
 function actualizarCurvas() {
     const ondas = calcularOndas();
-    const periodo = Math.max(0.8, 60 / fc_val);
-
     document.querySelector('.ecg').innerHTML = generarECG(ondas);
     document.querySelector('.spo2_curve').innerHTML = generarSpO2(ondas);
-    document.querySelector('.etco2_curve').innerHTML = generarEtCO2(ondas);
-
-    document.querySelectorAll('.curva svg').forEach(svg => {
-        svg.style.animationDuration = `${periodo}s`;
-    });
 }
 
 function sonidoLatido(){
