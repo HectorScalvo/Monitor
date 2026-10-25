@@ -138,13 +138,28 @@ function calcularOndas() {
     return Math.max(1, Math.floor(fc_val / 10));
 }
 
+function generarComplejoECG(x) {
+    return `
+      M ${x} 45
+      L ${x+22} 45
+      L ${x+28} 45
+      L ${x+42} 12
+      L ${x+66} 84
+      L ${x+94} 45
+      L ${x+120} 45
+      L ${x+160} 45
+    `;
+}
+
 function generarECG(ondas) {
-    const ancho = 170 * ondas;
+    const ancho = 160 * ondas;
     let d = '';
+
     for (let i = 0; i < ondas; i++) {
-        const x = i * 170;
-        d += `M ${x} 45 L ${x+30} 45 L ${x+40} 10 L ${x+60} 80 L ${x+80} 45 L ${x+120} 45 `;
+        const x = i * 160;
+        d += generarComplejoECG(x);
     }
+
     return `
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${ancho} 90" preserveAspectRatio="none">
         <path d="${d}" fill="none" stroke="lime" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
@@ -182,25 +197,29 @@ function generarEtCO2(ondas) {
 
 function actualizarCurvas() {
     const ondas = calcularOndas();
+    const periodo = Math.max(0.8, 60 / fc_val);
+
     document.querySelector('.ecg').innerHTML = generarECG(ondas);
     document.querySelector('.spo2_curve').innerHTML = generarSpO2(ondas);
     document.querySelector('.etco2_curve').innerHTML = generarEtCO2(ondas);
 
-    const velocidad = Math.max(1.2, 3.5 - (fc_val / 120));
     document.querySelectorAll('.curva svg').forEach(svg => {
-        svg.style.animationDuration = `${velocidad}s`;
+        svg.style.animationDuration = `${periodo}s`;
     });
 }
 
 function sonidoLatido(){
     const o = audioCtx.createOscillator();
     const g = audioCtx.createGain();
-    o.frequency.value = 800;
-    g.gain.setValueAtTime(0.5, audioCtx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+    const now = audioCtx.currentTime;
+    o.frequency.setValueAtTime(800, now);
+    o.frequency.exponentialRampToValueAtTime(620, now + 0.18);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(0.6, now + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
     o.connect(g).connect(audioCtx.destination);
-    o.start();
-    o.stop(audioCtx.currentTime + 0.15);
+    o.start(now);
+    o.stop(now + 0.18);
 }
 
 function iniciarLatidos(){
