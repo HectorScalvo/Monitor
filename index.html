@@ -4,11 +4,9 @@
 <meta charset="UTF-8">
 <title>Simulador ICTUS SUMMA112</title>
 
-<!-- TAILWIND CSS CORRECTAMENTE CARGADO -->
 <script src="https://cdn.tailwindcss.com"></script>
 
 <style>
-/* Ondas continuas */
 @keyframes wave {
     0% { transform: translateX(0); }
     100% { transform: translateX(-50%); }
@@ -17,44 +15,18 @@
 .curva {
     width: 100%;
     height: 90px;
-    animation: wave 3s linear infinite;
     background-repeat: repeat-x;
-    background-position: center;
-    background-size: 14.285% 100%;
+    background-position: 0 0;
+    opacity: 0.96;
+    filter: drop-shadow(0 0 8px rgba(255,255,255,0.10));
 }
 
-/* ECG */
-.ecg {
-background-image: url('data:image/svg+xml;utf8,\
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="90">\
-<polyline points="0,45 30,45 40,10 60,80 80,45 200,45 215,15 235,45 1600,45" fill="none" stroke="lime" stroke-width="3"/>\
-</svg>');
-}
-
-/* SpO2 */
-.spo2_curve {
-background-image: url('data:image/svg+xml;utf8,\
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="90">\
-<polyline points="0,60 80,55 160,48 240,52 320,62 400,70 480,63 1600,60" fill="none" stroke="cyan" stroke-width="3"/>\
-</svg>');
-}
-
-/* ETCO2 */
-.etco2_curve {
-background-image: url('data:image/svg+xml;utf8,\
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="90">\
-<polyline points="0,80 200,80 250,20 400,20 420,80 1600,80" fill="none" stroke="yellow" stroke-width="3"/>\
-</svg>');
-}
-
-/* Botón animación */
 @keyframes press {
     0% { transform: scale(1); }
     50% { transform: scale(0.92); }
     100% { transform: scale(1); }
 }
 
-/* Alarmas visuales */
 @keyframes alarmaRoja {
     0% { color: white; }
     50% { color: red; }
@@ -69,7 +41,6 @@ background-image: url('data:image/svg+xml;utf8,\
 
 <div class="flex h-screen">
 
-    <!-- COLUMNA IZQUIERDA 1/5 -->
     <div class="w-1/5 bg-gray-900 p-4 border-r-4 border-gray-700 flex flex-col gap-6">
 
         <div id="box_fc" onclick="editar('fc')" class="cursor-pointer">
@@ -98,32 +69,23 @@ background-image: url('data:image/svg+xml;utf8,\
 
     </div>
 
-    <!-- PANEL DERECHO 4/5 -->
     <div class="w-4/5 p-4 flex flex-col">
 
-        <!-- Cronómetro + botón SUMMA112 -->
         <div class="flex justify-between items-center mb-4">
-
-            <!-- Cronómetro -->
             <div class="text-3xl w-full text-center" id="cronometro">00:00:00</div>
 
-            <!-- BOTÓN SUMMA112 -->
             <div id="botonSUMMA"
                 onclick="toggleSUMMA()"
                 class="cursor-pointer ml-4 bg-white p-2 rounded-lg shadow-xl"
                 style="width:150px;">
 
-                <!-- BANDERAS -->
                 <div class="flex">
-
-                    <!-- Izquierda -->
                     <div style="width:50%; height:40px;">
                         <div style="background:#cc0000; height:33%;"></div>
                         <div style="background:yellow; height:33%;"></div>
                         <div style="background:#cc0000; height:33%;"></div>
                     </div>
 
-                    <!-- Derecha (Madrid) -->
                     <div style="width:50%; height:40px; background:#cc0000;">
                         <div style="display:flex; justify-content:center; gap:3px; padding-top:2px;">
                             <span style="color:white;">★</span><span style="color:white;">★</span>
@@ -134,10 +96,8 @@ background-image: url('data:image/svg+xml;utf8,\
                             <span style="color:white;">★</span>
                         </div>
                     </div>
-
                 </div>
 
-                <!-- Texto SUMMA112 -->
                 <div class="text-center text-blue-600 font-bold text-xl mt-1"
                      style="font-family:Arial; text-shadow:0 0 3px white;">
                     SUMMA112
@@ -145,52 +105,158 @@ background-image: url('data:image/svg+xml;utf8,\
             </div>
         </div>
 
-        <!-- Curvas -->
         <div class="flex flex-col gap-6 w-full overflow-hidden">
-
             <div class="overflow-hidden"><div class="curva ecg"></div></div>
             <div class="overflow-hidden"><div class="curva etco2_curve"></div></div>
             <div class="overflow-hidden"><div class="curva spo2_curve"></div></div>
-
         </div>
     </div>
 </div>
 
 <script>
-/* VARIABLES */
 let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 let fc_val = 72;
 let intervalLatido;
 let segundos = 0;
 let intervalCrono;
 let activoSUMMA = false;
+let waveAnimationId = null;
+let waveTime = 0;
 
-function actualizarOndas(){
-    const pulsos = Math.max(1, Math.floor(fc_val / 10));
-    const tamañoPatron = `${100 / pulsos}% 100%`;
-
-    document.querySelectorAll('.curva').forEach(el => {
-        el.style.backgroundSize = tamañoPatron;
-    });
+function calcularOndas(){
+    return Math.max(1, Math.floor(fc_val / 10));
 }
 
-/* SONIDO */
+function svgToDataUri(svg) {
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+function generarPatronECG(ondas) {
+    const w = 1600;
+    const h = 90;
+    const espacio = w / Math.max(ondas, 1);
+    const puntos = [];
+
+    for (let i = 0; i < ondas; i++) {
+        const inicio = i * espacio;
+        puntos.push(`${inicio},45`);
+        puntos.push(`${inicio + 30},45`);
+        puntos.push(`${inicio + 40},10`);
+        puntos.push(`${inicio + 60},80`);
+        puntos.push(`${inicio + 80},45`);
+        puntos.push(`${inicio + 200},45`);
+        puntos.push(`${inicio + 215},15`);
+        puntos.push(`${inicio + 235},45`);
+        puntos.push(`${inicio + espacio},45`);
+    }
+
+    const polyline = puntos.map((p, idx) => idx === 0 ? `M ${p}` : `L ${p}`).join(' ');
+    return `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+        <path d="${polyline}" fill="none" stroke="lime" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    `;
+}
+
+function generarPatronSpO2(ondas) {
+    const w = 1600;
+    const h = 90;
+    const espacio = w / Math.max(ondas, 1);
+    const chunks = [];
+
+    for (let i = 0; i < ondas; i++) {
+        const inicio = i * espacio;
+        chunks.push(`${inicio},60`);
+        chunks.push(`${inicio + 80},55`);
+        chunks.push(`${inicio + 160},48`);
+        chunks.push(`${inicio + 240},52`);
+        chunks.push(`${inicio + 320},62`);
+        chunks.push(`${inicio + 400},70`);
+        chunks.push(`${inicio + 480},63`);
+        chunks.push(`${inicio + espacio},60`);
+    }
+
+    const polyline = chunks.map((p, idx) => idx === 0 ? `M ${p}` : `L ${p}`).join(' ');
+    return `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+        <path d="${polyline}" fill="none" stroke="cyan" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    `;
+}
+
+function generarPatronEtCO2(ondas) {
+    const w = 1600;
+    const h = 90;
+    const espacio = w / Math.max(ondas, 1);
+    const chunks = [];
+
+    for (let i = 0; i < ondas; i++) {
+        const inicio = i * espacio;
+        chunks.push(`${inicio},80`);
+        chunks.push(`${inicio + 200},80`);
+        chunks.push(`${inicio + 250},20`);
+        chunks.push(`${inicio + 400},20`);
+        chunks.push(`${inicio + 420},80`);
+        chunks.push(`${inicio + espacio},80`);
+    }
+
+    const polyline = chunks.map((p, idx) => idx === 0 ? `M ${p}` : `L ${p}`).join(' ');
+    return `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+        <path d="${polyline}" fill="none" stroke="yellow" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    `;
+}
+
+function actualizarCurvas() {
+    const ondas = calcularOndas();
+    const velocidad = (fc_val / 60) * 2.2;
+
+    document.querySelectorAll('.curva').forEach(el => {
+        el.style.backgroundSize = `${(1600 / ondas)}px 100%`;
+    });
+
+    const ecg = svgToDataUri(generarPatronECG(ondas));
+    const spo2 = svgToDataUri(generarPatronSpO2(ondas));
+    const etco2 = svgToDataUri(generarPatronEtCO2(ondas));
+
+    document.querySelector('.ecg').style.backgroundImage = `url("${ecg}")`;
+    document.querySelector('.spo2_curve').style.backgroundImage = `url("${spo2}")`;
+    document.querySelector('.etco2_curve').style.backgroundImage = `url("${etco2}")`;
+
+    const offset = (waveTime * velocidad * 6) % (1600 / ondas);
+    document.querySelector('.ecg').style.backgroundPosition = `${-offset}px 0`;
+    document.querySelector('.spo2_curve').style.backgroundPosition = `${-offset * 0.9}px 0`;
+    document.querySelector('.etco2_curve').style.backgroundPosition = `${-offset * 1.1}px 0`;
+}
+
+function animarOndas() {
+    if (waveAnimationId) cancelAnimationFrame(waveAnimationId);
+
+    const paso = () => {
+        waveTime += 0.016;
+        actualizarCurvas();
+        waveAnimationId = requestAnimationFrame(paso);
+    };
+
+    waveAnimationId = requestAnimationFrame(paso);
+}
+
 function sonidoLatido(){
     const o = audioCtx.createOscillator();
     const g = audioCtx.createGain();
     o.frequency.value = 800;
     g.gain.setValueAtTime(0.5, audioCtx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+0.15);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
     o.connect(g).connect(audioCtx.destination);
-    o.start(); o.stop(audioCtx.currentTime+0.15);
+    o.start(); o.stop(audioCtx.currentTime + 0.15);
 }
 
 function iniciarLatidos(){
     clearInterval(intervalLatido);
-    intervalLatido = setInterval(sonidoLatido, 60000/fc_val);
+    intervalLatido = setInterval(sonidoLatido, 60000 / fc_val);
 }
 
-/* CRONÓMETRO */
 function actualizarCrono(){
     segundos++;
     const h = String(Math.floor(segundos/3600)).padStart(2,'0');
@@ -203,13 +269,12 @@ function iniciarCrono(){ intervalCrono = setInterval(actualizarCrono,1000); }
 function pararCrono(){
     clearInterval(intervalCrono);
     segundos = 0;
-    cronometro.textContent="00:00:00";
+    cronometro.textContent = '00:00:00';
 }
 
-/* BOTÓN SUMMA112 */
 function toggleSUMMA(){
-    const btn = document.getElementById("botonSUMMA");
-    btn.style.animation = "press 0.3s";
+    const btn = document.getElementById('botonSUMMA');
+    btn.style.animation = 'press 0.3s';
 
     activoSUMMA = !activoSUMMA;
 
@@ -221,31 +286,33 @@ function toggleSUMMA(){
         clearInterval(intervalLatido);
     }
 
-    setTimeout(()=>btn.style.animation="",300);
+    setTimeout(() => btn.style.animation = '', 300);
 }
 
-/* EDITAR PARÁMETROS */
 function editar(id){
     const el = document.getElementById(id);
-    const v = prompt("Nuevo valor:", el.textContent);
+    const v = prompt('Nuevo valor:', el.textContent);
     if (!v) return;
     el.textContent = v;
-    if (id==="fc"){ fc_val = parseInt(v); actualizarOndas(); iniciarLatidos(); }
+    if (id === 'fc') {
+        fc_val = parseInt(v) || 72;
+        actualizarCurvas();
+        iniciarLatidos();
+    }
     checkAlarmas();
 }
 
 function editarTA(){
-    const el = document.getElementById("ta");
-    const v = prompt("Nueva TA:", el.textContent);
+    const el = document.getElementById('ta');
+    const v = prompt('Nueva TA:', el.textContent);
     if (!v) return;
     el.textContent = v;
     checkAlarmas();
 }
 
-/* ALARMAS */
 function clearAlarmas(){
-    ["box_fc","box_spo2","box_ta"].forEach(id =>
-        document.getElementById(id).classList.remove("alarma")
+    ['box_fc', 'box_spo2', 'box_ta'].forEach(id =>
+        document.getElementById(id).classList.remove('alarma')
     );
 }
 
@@ -253,14 +320,15 @@ function checkAlarmas(){
     clearAlarmas();
     const fc = parseInt(fc_val);
     const spo = parseInt(spo2.textContent);
-    const sist = parseInt(ta.textContent.split("/")[0]);
+    const sist = parseInt(ta.textContent.split('/')[0]);
 
-    if (fc>120) box_fc.classList.add("alarma");
-    if (spo<92) box_spo2.classList.add("alarma");
-    if (sist>170) box_ta.classList.add("alarma");
+    if (fc > 120) box_fc.classList.add('alarma');
+    if (spo < 92) box_spo2.classList.add('alarma');
+    if (sist > 170) box_ta.classList.add('alarma');
 }
 
-actualizarOndas();
+actualizarCurvas();
+animarOndas();
 </script>
 
 </body>
