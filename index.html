@@ -136,14 +136,36 @@ function calcularOndas() {
     return Math.max(1, Math.floor(fc_val / 10));
 }
 
-function generarComplejoECG(x) {
-    return `
-      M ${x} 45
-      C ${x + 18} 45, ${x + 28} 45, ${x + 38} 14
-      C ${x + 54} 8, ${x + 68} 10, ${x + 76} 35
-      C ${x + 88} 58, ${x + 102} 60, ${x + 118} 45
-      C ${x + 135} 45, ${x + 150} 45, ${x + 170} 45
-    `;
+function smoothPath(points) {
+    if (!points.length) return '';
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 1; i < points.length - 1; i++) {
+        const xc = (points[i].x + points[i + 1].x) / 2;
+        const yc = (points[i].y + points[i + 1].y) / 2;
+        d += ` Q ${points[i].x} ${points[i].y} ${xc} ${yc}`;
+    }
+    const last = points[points.length - 1];
+    d += ` T ${last.x} ${last.y}`;
+    return d;
+}
+
+function generarComplejoECG(xBase) {
+    const puntos = [
+        { x: xBase + 0, y: 45 },
+        { x: xBase + 10, y: 45 },
+        { x: xBase + 18, y: 45 },
+        { x: xBase + 26, y: 18 },
+        { x: xBase + 38, y: 76 },
+        { x: xBase + 52, y: 48 },
+        { x: xBase + 62, y: 45 },
+        { x: xBase + 74, y: 20 },
+        { x: xBase + 86, y: 46 },
+        { x: xBase + 102, y: 45 },
+        { x: xBase + 120, y: 45 },
+        { x: xBase + 138, y: 45 },
+        { x: xBase + 170, y: 45 }
+    ];
+    return smoothPath(puntos);
 }
 
 function generarECG(ondas) {
@@ -166,14 +188,21 @@ function generarSpO2(ondas) {
     let d = '';
 
     for (let i = 0; i < ondas; i++) {
-        const x = i * 170;
-        d += `
-          M ${x} 58
-          C ${x + 18} 58, ${x + 30} 58, ${x + 42} 52
-          C ${x + 58} 46, ${x + 72} 72, ${x + 90} 80
-          C ${x + 106} 86, ${x + 124} 58, ${x + 142} 54
-          C ${x + 158} 52, ${x + 170} 58, ${x + 170} 58
-        `;
+        const xBase = i * 170;
+        const puntos = [
+            { x: xBase + 0, y: 58 },
+            { x: xBase + 16, y: 58 },
+            { x: xBase + 34, y: 56 },
+            { x: xBase + 50, y: 52 },
+            { x: xBase + 68, y: 46 },
+            { x: xBase + 86, y: 36 },
+            { x: xBase + 108, y: 62 },
+            { x: xBase + 128, y: 72 },
+            { x: xBase + 146, y: 66 },
+            { x: xBase + 158, y: 60 },
+            { x: xBase + 170, y: 58 }
+        ];
+        d += smoothPath(puntos);
     }
 
     return `
@@ -185,8 +214,14 @@ function generarSpO2(ondas) {
 
 function actualizarCurvas() {
     const ondas = calcularOndas();
+    const periodo = Math.max(0.8, 60 / fc_val);
+
     document.querySelector('.ecg').innerHTML = generarECG(ondas);
     document.querySelector('.spo2_curve').innerHTML = generarSpO2(ondas);
+
+    document.querySelectorAll('.curva svg').forEach(svg => {
+        svg.style.animationDuration = `${periodo}s`;
+    });
 }
 
 function sonidoLatido(){
