@@ -7,34 +7,48 @@
 <script src="https://cdn.tailwindcss.com"></script>
 
 <style>
-@keyframes wave {
-    0% { transform: translateX(0); }
-    100% { transform: translateX(-50%); }
-}
-
-.curva {
+  .curva {
     width: 100%;
     height: 90px;
-    background-repeat: repeat-x;
-    background-position: 0 0;
-    opacity: 0.96;
-    filter: drop-shadow(0 0 8px rgba(255,255,255,0.10));
-}
+    overflow: hidden;
+    position: relative;
+    display: block;
+    background: rgba(255,255,255,0.02);
+  }
 
-@keyframes press {
+  .curva svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-width: 100%;
+    will-change: transform;
+  }
+
+  .curva.ecg svg,
+  .curva.spo2_curve svg,
+  .curva.etco2_curve svg {
+    animation: drift 2s linear infinite;
+  }
+
+  @keyframes drift {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-12%); }
+  }
+
+  @keyframes press {
     0% { transform: scale(1); }
     50% { transform: scale(0.92); }
     100% { transform: scale(1); }
-}
+  }
 
-@keyframes alarmaRoja {
+  @keyframes alarmaRoja {
     0% { color: white; }
     50% { color: red; }
     100% { color: white; }
-}
-.alarma { animation: alarmaRoja 1s infinite; }
-</style>
+  }
 
+  .alarma { animation: alarmaRoja 1s infinite; }
+</style>
 </head>
 
 <body class="bg-black text-green-400 overflow-hidden">
@@ -70,7 +84,6 @@
     </div>
 
     <div class="w-4/5 p-4 flex flex-col">
-
         <div class="flex justify-between items-center mb-4">
             <div class="text-3xl w-full text-center" id="cronometro">00:00:00</div>
 
@@ -106,9 +119,9 @@
         </div>
 
         <div class="flex flex-col gap-6 w-full overflow-hidden">
-            <div class="overflow-hidden"><div class="curva ecg"></div></div>
-            <div class="overflow-hidden"><div class="curva etco2_curve"></div></div>
-            <div class="overflow-hidden"><div class="curva spo2_curve"></div></div>
+            <div class="overflow-hidden curva ecg"></div>
+            <div class="overflow-hidden curva etco2_curve"></div>
+            <div class="overflow-hidden curva spo2_curve"></div>
         </div>
     </div>
 </div>
@@ -120,126 +133,63 @@ let intervalLatido;
 let segundos = 0;
 let intervalCrono;
 let activoSUMMA = false;
-let waveAnimationId = null;
-let waveTime = 0;
 
-function calcularOndas(){
+function calcularOndas() {
     return Math.max(1, Math.floor(fc_val / 10));
 }
 
-function svgToDataUri(svg) {
-    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-}
-
-function generarPatronECG(ondas) {
-    const w = 1600;
-    const h = 90;
-    const espacio = w / Math.max(ondas, 1);
-    const puntos = [];
-
+function generarECG(ondas) {
+    const ancho = 170 * ondas;
+    let d = '';
     for (let i = 0; i < ondas; i++) {
-        const inicio = i * espacio;
-        puntos.push(`${inicio},45`);
-        puntos.push(`${inicio + 30},45`);
-        puntos.push(`${inicio + 40},10`);
-        puntos.push(`${inicio + 60},80`);
-        puntos.push(`${inicio + 80},45`);
-        puntos.push(`${inicio + 200},45`);
-        puntos.push(`${inicio + 215},15`);
-        puntos.push(`${inicio + 235},45`);
-        puntos.push(`${inicio + espacio},45`);
+        const x = i * 170;
+        d += `M ${x} 45 L ${x+30} 45 L ${x+40} 10 L ${x+60} 80 L ${x+80} 45 L ${x+120} 45 `;
     }
-
-    const polyline = puntos.map((p, idx) => idx === 0 ? `M ${p}` : `L ${p}`).join(' ');
     return `
-      <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-        <path d="${polyline}" fill="none" stroke="lime" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${ancho} 90" preserveAspectRatio="none">
+        <path d="${d}" fill="none" stroke="lime" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     `;
 }
 
-function generarPatronSpO2(ondas) {
-    const w = 1600;
-    const h = 90;
-    const espacio = w / Math.max(ondas, 1);
-    const chunks = [];
-
+function generarSpO2(ondas) {
+    const ancho = 170 * ondas;
+    let d = '';
     for (let i = 0; i < ondas; i++) {
-        const inicio = i * espacio;
-        chunks.push(`${inicio},60`);
-        chunks.push(`${inicio + 80},55`);
-        chunks.push(`${inicio + 160},48`);
-        chunks.push(`${inicio + 240},52`);
-        chunks.push(`${inicio + 320},62`);
-        chunks.push(`${inicio + 400},70`);
-        chunks.push(`${inicio + 480},63`);
-        chunks.push(`${inicio + espacio},60`);
+        const x = i * 170;
+        d += `M ${x} 60 L ${x+80} 55 L ${x+160} 48 L ${x+240} 52 L ${x+320} 62 L ${x+400} 70 L ${x+480} 63 L ${x+560} 60 `;
     }
-
-    const polyline = chunks.map((p, idx) => idx === 0 ? `M ${p}` : `L ${p}`).join(' ');
     return `
-      <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-        <path d="${polyline}" fill="none" stroke="cyan" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${ancho} 90" preserveAspectRatio="none">
+        <path d="${d}" fill="none" stroke="cyan" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     `;
 }
 
-function generarPatronEtCO2(ondas) {
-    const w = 1600;
-    const h = 90;
-    const espacio = w / Math.max(ondas, 1);
-    const chunks = [];
-
+function generarEtCO2(ondas) {
+    const ancho = 170 * ondas;
+    let d = '';
     for (let i = 0; i < ondas; i++) {
-        const inicio = i * espacio;
-        chunks.push(`${inicio},80`);
-        chunks.push(`${inicio + 200},80`);
-        chunks.push(`${inicio + 250},20`);
-        chunks.push(`${inicio + 400},20`);
-        chunks.push(`${inicio + 420},80`);
-        chunks.push(`${inicio + espacio},80`);
+        const x = i * 170;
+        d += `M ${x} 80 L ${x+200} 80 L ${x+250} 20 L ${x+420} 20 L ${x+470} 80 L ${x+560} 80 `;
     }
-
-    const polyline = chunks.map((p, idx) => idx === 0 ? `M ${p}` : `L ${p}`).join(' ');
     return `
-      <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-        <path d="${polyline}" fill="none" stroke="yellow" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${ancho} 90" preserveAspectRatio="none">
+        <path d="${d}" fill="none" stroke="yellow" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     `;
 }
 
 function actualizarCurvas() {
     const ondas = calcularOndas();
-    const velocidad = (fc_val / 60) * 2.2;
+    document.querySelector('.ecg').innerHTML = generarECG(ondas);
+    document.querySelector('.spo2_curve').innerHTML = generarSpO2(ondas);
+    document.querySelector('.etco2_curve').innerHTML = generarEtCO2(ondas);
 
-    document.querySelectorAll('.curva').forEach(el => {
-        el.style.backgroundSize = `${(1600 / ondas)}px 100%`;
+    const velocidad = Math.max(1.2, 3.5 - (fc_val / 120));
+    document.querySelectorAll('.curva svg').forEach(svg => {
+        svg.style.animationDuration = `${velocidad}s`;
     });
-
-    const ecg = svgToDataUri(generarPatronECG(ondas));
-    const spo2 = svgToDataUri(generarPatronSpO2(ondas));
-    const etco2 = svgToDataUri(generarPatronEtCO2(ondas));
-
-    document.querySelector('.ecg').style.backgroundImage = `url("${ecg}")`;
-    document.querySelector('.spo2_curve').style.backgroundImage = `url("${spo2}")`;
-    document.querySelector('.etco2_curve').style.backgroundImage = `url("${etco2}")`;
-
-    const offset = (waveTime * velocidad * 6) % (1600 / ondas);
-    document.querySelector('.ecg').style.backgroundPosition = `${-offset}px 0`;
-    document.querySelector('.spo2_curve').style.backgroundPosition = `${-offset * 0.9}px 0`;
-    document.querySelector('.etco2_curve').style.backgroundPosition = `${-offset * 1.1}px 0`;
-}
-
-function animarOndas() {
-    if (waveAnimationId) cancelAnimationFrame(waveAnimationId);
-
-    const paso = () => {
-        waveTime += 0.016;
-        actualizarCurvas();
-        waveAnimationId = requestAnimationFrame(paso);
-    };
-
-    waveAnimationId = requestAnimationFrame(paso);
 }
 
 function sonidoLatido(){
@@ -249,7 +199,8 @@ function sonidoLatido(){
     g.gain.setValueAtTime(0.5, audioCtx.currentTime);
     g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
     o.connect(g).connect(audioCtx.destination);
-    o.start(); o.stop(audioCtx.currentTime + 0.15);
+    o.start();
+    o.stop(audioCtx.currentTime + 0.15);
 }
 
 function iniciarLatidos(){
@@ -265,7 +216,10 @@ function actualizarCrono(){
     cronometro.textContent = `${h}:${m}:${s}`;
 }
 
-function iniciarCrono(){ intervalCrono = setInterval(actualizarCrono,1000); }
+function iniciarCrono(){
+    intervalCrono = setInterval(actualizarCrono, 1000);
+}
+
 function pararCrono(){
     clearInterval(intervalCrono);
     segundos = 0;
@@ -328,7 +282,6 @@ function checkAlarmas(){
 }
 
 actualizarCurvas();
-animarOndas();
 </script>
 
 </body>
